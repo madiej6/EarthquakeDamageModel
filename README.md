@@ -40,8 +40,7 @@ To run the model in testing mode:
 - Future versions of this code will be open source (non-arcpy dependent).
 - For now, use [this link](https://support.esri.com/en/technical-article/000020560) for instructions to clone your ArcGIS Pro Python environment, and then install requirements.txt in the cloned environment.
 - Then, in terminal run the following lines to kickoff the Earthquake Model:  
-`conda activate <file path of cloned arcpro env with geopandas installed>`    
-`cd <file path of repo WorkingScripts folder ...\EarthquakeModel\WorkingScripts>`  
+`conda activate <env-name>`      
 `python main.py`   
 
 #### Earthquake Model Methodology
