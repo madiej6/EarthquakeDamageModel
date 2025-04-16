@@ -9,6 +9,3 @@ def get_date():
     print(DateToday)
 
     return DateToday
-
-if __name__ == "__main__":
-    get_date()

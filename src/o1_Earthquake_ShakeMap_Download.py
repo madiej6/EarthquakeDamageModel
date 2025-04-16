@@ -5,13 +5,12 @@ try:
 except:
     from urllib.request import urlopen
 import json
-import shutil
 import os
 import zipfile
 import io
 import datetime
-from within_conus import check_coords
-from get_file_paths import get_shakemap_dir
+from src.utils.within_conus import check_coords
+from utils.get_file_paths import get_shakemap_dir
 
 
 def check_for_shakemaps(mmi_threshold = 3):

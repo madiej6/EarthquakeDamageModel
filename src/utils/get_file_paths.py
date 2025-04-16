@@ -9,6 +9,3 @@ def get_shakemap_dir():
         ShakeMapDir = os.path.join(os.path.dirname(os.getcwd()), 'ShakeMaps')
 
     return ShakeMapDir
-
-if __name__ == "__main__":
-    get_shakemap_dir()

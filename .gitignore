@@ -1,18 +1,7 @@
 # Files to ignore:
-Data/esri_2019_detailed_counties/2019*
-Data/IRC_2006_2009/
-Data/tl_2019_us_county/
-Data/tl_2019_us_tracts/2019*
-Data/usa_states/
-do_not_push/
-OriginalScripts/
+data/esri_2019_detailed_counties/*
+data/tl_2019_us_tracts/*
 ShakeMaps/*
-tables/lightbox*
-WorkingScripts/FEMA_Analysis_Tools*
-WorkingScripts/get_seismic_design_code.py
-WorkingScripts/join_seis_code.py
-WorkingScripts/o4_Earthquake_GetHazusStructureType.py
-OriginalScripts.zip
 
 # PyCharm
 .idea/

@@ -1,7 +1,7 @@
 import arcpy
 import os
-from get_file_paths import get_shakemap_dir
-from get_shakemap_files import get_shakemap_files
+from utils.get_file_paths import get_shakemap_dir
+from utils.get_shakemap_files import get_shakemap_files
 import config
 
 

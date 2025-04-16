@@ -12,7 +12,7 @@ The following supplemental data sets will need to be downloaded and stored in th
 | Esri/Census| [link](https://www.arcgis.com/home/item.html?id=a00d6b6149b34ed3b833e10fb72ef47b)| Export layer "USA Counties (below 1:3m)" to shapefile | esri_2019_detailed_counties\2019detailedcounties.shp| 
 | Census | [link](https://www2.census.gov/geo/tiger/TIGER2019/TRACT/) | Download and merge all into a single nationwide tracts shapefile | tl_2019_us_tracts\2019censustracts.shp | 
 
-<img align="right" src = "bldg_centroids_gdb_screenshot.PNG" width="250">
+<img align="right" src = "images/bldg_centroids_gdb_screenshot.PNG" width="250">
 
 #### Building Centroids:
 In order to estimate the number of structures impacted, the user will need to have a local geodatabase
@@ -53,4 +53,4 @@ For more information about model methodology, review [this blog post on medium](
 - [Hazus Earthquake Technical Manual](https://www.fema.gov/flood-maps/tools-resources/flood-map-products/hazus/user-technical-manuals#:~:text=Hazus%20Earthquake%20Manuals&text=The%20Hazus%20Earthquake%20User%20and,%2C%20scenario%2C%20or%20probabilistic%20earthquakes.)
 
 ##### Contact
-Madeline Jones - [@madiej6](https://twitter.com/madiej6) - madelinejones214@gmail.com
+Madeline Jones - madeline.jones.data.engineer@gmail.com

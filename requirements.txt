@@ -1,1 +1,4 @@
 geopandas
+scipy
+pandas
+arcpy
