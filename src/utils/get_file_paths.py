@@ -1,11 +1,9 @@
 import os
 
 def get_shakemap_dir():
+    shakemap_dir = os.path.join(os.path.dirname(os.getcwd()), 'ShakeMaps')
     # Set file path to save ShakeMap zip files to
-    if os.path.exists(os.path.join(os.path.dirname(os.getcwd()), 'ShakeMaps')):
-        ShakeMapDir = os.path.join(os.path.dirname(os.getcwd()), 'ShakeMaps')
-    else:
-        os.mkdir(os.path.join(os.path.dirname(os.getcwd()), 'ShakeMaps'))
-        ShakeMapDir = os.path.join(os.path.dirname(os.getcwd()), 'ShakeMaps')
+    if not os.path.exists(shakemap_dir):
+        os.mkdir(shakemap_dir)
 
-    return ShakeMapDir
+    return shakemap_dir
