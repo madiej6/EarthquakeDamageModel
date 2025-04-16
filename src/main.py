@@ -8,7 +8,7 @@ import o4_TractLevel_DamageAssessmentModel
 import config
 
 
-def main(testingmode = False):
+def main(testingmode = True):
     if not testingmode:
         # if not in testing mode, look for real new shakemaps
         new_events = o1_Earthquake_ShakeMap_Download.check_for_shakemaps()
