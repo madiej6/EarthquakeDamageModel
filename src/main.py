@@ -1,7 +1,7 @@
 import os
 import time
         
-import o1_Earthquake_ShakeMap_Download
+from earthquake_shakemap_download import check_for_shakemaps
 import o2_Earthquake_ShakeMap_Into_CensusGeographies
 import o3_Earthquake_GetBldgCentroids
 import o4_TractLevel_DamageAssessmentModel
@@ -11,7 +11,7 @@ import config
 def main(testingmode = True):
     if not testingmode:
         # if not in testing mode, look for real new shakemaps
-        new_events = o1_Earthquake_ShakeMap_Download.check_for_shakemaps()
+        new_events = check_for_shakemaps()
         # new events should be a list of newly downloaded earthquake event folders
 
 
