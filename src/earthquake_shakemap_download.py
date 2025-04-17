@@ -24,7 +24,6 @@ def get_data_from_url(url: str):
         data (bytes): data from url
     
     """
-    # Here, read the binary zipfile into a string
     fh = urlopen(url)
     data = fh.read()
     fh.close()
@@ -134,8 +133,6 @@ def check_for_shakemaps(mmi_threshold: int = 4) -> list:
         shakemap = shakemap_dict['properties']['products']['shakemap'][0] 
         # get the download url for the shape zipfile
         shapezip_url = shakemap['contents']['download/shape.zip']['url'] 
-
-    ## EXTRACT SHAKEMAP ZIP FILE IN NEW FOLDER
 
         event_dir = os.path.join(shakemap_dir, str(event_id))
 
