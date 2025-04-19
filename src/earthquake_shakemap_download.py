@@ -5,7 +5,7 @@ import json
 import os
 import zipfile
 import io
-import datetime
+from datetime import datetime
 from utils.within_conus import check_coords
 from utils.get_file_paths import get_shakemap_dir
 from utils.status_logger import log_status, get_last_status
@@ -65,13 +65,13 @@ def create_shakemap_gis_files(
     title = str(earthquake_dict["properties"]["title"])
     mag = earthquake_dict["properties"]["mag"]
     time = str(earthquake_dict["properties"]["time"])
-    time_pretty = datetime.datetime.fromtimestamp(int(time[:-3])).strftime("%c")
+    time_pretty = datetime.fromtimestamp(int(time[:-3])).strftime("%c")
     place = str(earthquake_dict["properties"]["place"])
     url = str(earthquake_dict["properties"]["url"])
     event_id = str(event_id)
     status = str(earthquake_dict["properties"]["status"])
     updated = str(earthquake_dict["properties"]["updated"])
-    updated_pretty = datetime.datetime.fromtimestamp(int(updated[:-3])).strftime("%c")
+    updated_pretty = datetime.fromtimestamp(int(updated[:-3])).strftime("%c")
 
     log_status(event_dir, status, updated)
 
@@ -111,15 +111,11 @@ def check_for_shakemaps(mmi_threshold: int = 4) -> list:
     shakemap_dir = get_shakemap_dir()
     new_shakemap_folders = []
 
+    # Get the data from the FEEDURL as a json dictionary
     data = get_data_from_url(FEEDURL)
-    feed_dict = json.loads(
-        data
-    )  # Parse that Data using the stdlib json module.  This turns into a Python dictionary.
+    feed_dict = json.loads(data)
 
-    # noinspection PyUnboundLocalVariable
-    for earthquake_dict in feed_dict[
-        "features"
-    ]:  # jdict['features'] is the list of events
+    for earthquake_dict in feed_dict["features"]:
         event_id = earthquake_dict["id"]
 
         event_url = earthquake_dict["properties"]["detail"]
@@ -155,9 +151,7 @@ def check_for_shakemaps(mmi_threshold: int = 4) -> list:
             )
 
             file_list = os.listdir(event_dir)
-            logging.info(
-                "Extracted {} ShakeMap files to {}".format(len(file_list), event_dir)
-            )
+            logging.info(f"Extracted {len(file_list)} ShakeMap files to {event_dir}")
             new_shakemap_folders.append(event_dir)
 
         else:
@@ -181,9 +175,9 @@ def check_for_shakemaps(mmi_threshold: int = 4) -> list:
 
                 # create archive subdirectory
                 list_subfolders = [f.name for f in os.scandir(event_dir) if f.is_dir()]
-                old_date = datetime.datetime.fromtimestamp(
-                    int(old_updated[:-3])
-                ).strftime("%Y%m%d")
+                old_date = datetime.fromtimestamp(int(old_updated[:-3])).strftime(
+                    "%Y%m%d"
+                )
                 archive_folder_name = "archive_{}".format(old_date)
                 archive_zip_name = archive_folder_name + ".zip"
 
