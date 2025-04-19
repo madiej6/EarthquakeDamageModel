@@ -1,4 +1,3 @@
-
 # File path to building centroids GDB
 BuildingCentroids = "data/ORNL_USAStructures_Centroids_LightboxSpatialJoin.gdb"
 

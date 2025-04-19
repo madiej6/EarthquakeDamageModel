@@ -25,7 +25,6 @@ def get_data_from_url(url: str):
         url (str): url to read data from
     Returns:
         data (bytes): data from url
-
     """
     fh = urlopen(url)
     data = fh.read()
@@ -37,14 +36,14 @@ def get_data_from_url(url: str):
 def create_shakemap_gis_files(
     event_id: str, shapezip_url: str, event_dir: str, earthquake_dict: dict
 ):
-    """
-    Extracts & unzips ShakeMap GIS Files. Converts the earthquake epicenter into a point shapefile.
+    """Extracts & unzips ShakeMap GIS Files. Converts the earthquake epicenter
+    into a point shapefile.
 
     Args:
+        event_id(str): event id
         shapezip_url (str): URL of the ShakeMap zip file
         event_dir (str): filepath of the event dir where files will be extracted to
         earthquake_dict (dict): earthquake json from the FEED URL
-
     """
 
     data = get_data_from_url(shapezip_url)
@@ -77,7 +76,7 @@ def create_shakemap_gis_files(
     log_status(event_dir, status, updated)
 
     event_details = (title, mag, time_pretty, place, depth, url, event_id)
-    logging.info("New event successfully downloaded: ", event_details)
+    logging.info(f"New event successfully downloaded: {event_details}")
 
     # Update empty point with epicenter lat/long
     epi = Point(epi_x, epi_y)
@@ -100,8 +99,7 @@ def create_shakemap_gis_files(
 
 
 def check_for_shakemaps(mmi_threshold: int = 4) -> list:
-    """
-    Check for shakemaps using the uncommented FEEDURL.
+    """Check for shakemaps using the uncommented FEEDURL.
 
     Args:
         mmi_threshold (int): MMI threshold for earthquakes to download.
