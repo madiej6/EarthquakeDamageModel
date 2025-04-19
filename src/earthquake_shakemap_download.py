@@ -122,10 +122,10 @@ def check_for_shakemaps(mmi_threshold: int = 4) -> list:
         data = get_data_from_url(event_url)
         shakemap_dict = json.loads(data)
         if shakemap_dict["properties"]["mag"] < mmi_threshold:
-            logging.info("Skipping {}: mag < {}".format(event_id, mmi_threshold))
+            logging.info(f"Skipping {event_id}: mag < {mmi_threshold}")
             continue
         if "shakemap" not in shakemap_dict["properties"]["products"].keys():
-            logging.info("Skipping {}: no shakemap available".format(event_id))
+            logging.info(f"Skipping {event_id}: no shakemap available")
             continue
 
         [lon, lat] = shakemap_dict["geometry"]["coordinates"][0:2]
@@ -209,9 +209,7 @@ def check_for_shakemaps(mmi_threshold: int = 4) -> list:
                         os.remove(os.path.join(event_dir, file))
 
                 logging.info(
-                    "Previously downloaded ShakeMap files for {} have been archived.".format(
-                        event_id
-                    )
+                    f"Previously downloaded ShakeMap files for {event_id} have been archived."
                 )
 
                 create_shakemap_gis_files(
@@ -224,18 +222,14 @@ def check_for_shakemaps(mmi_threshold: int = 4) -> list:
                     if os.path.isfile(os.path.join(event_dir, f))
                 ]
                 logging.info(
-                    "Successfully downloaded {} ShakeMap files to {}".format(
-                        len(filecount), event_dir
-                    )
+                    f"Successfully downloaded {len(filecount)} ShakeMap files to {event_dir}"
                 )
                 new_shakemap_folders.append(event_dir)
 
             else:
 
                 logging.info(
-                    "ShakeMap files for {} already exist and have not been updated.".format(
-                        event_id
-                    )
+                    f"ShakeMap files for {event_id} already exist and have not been updated."
                 )
 
     logging.info("Completed.")
