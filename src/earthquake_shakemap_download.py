@@ -11,7 +11,7 @@ from utils.get_file_paths import get_shakemap_dir
 from utils.status_logger import log_status, get_last_status
 from utils.get_date import convert_to_timestamp
 import logging
-from utils.duckdb_utils import execute
+from utils.duckdb import execute
 import duckdb
 
 logging.basicConfig(level=logging.INFO)

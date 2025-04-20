@@ -1,4 +1,4 @@
-from utils.duckdb_utils import execute
+from utils.duckdb import execute
 import duckdb
 from utils.get_date import convert_to_timestamp
 

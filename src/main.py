@@ -4,11 +4,12 @@ import argparse
 from earthquake_shakemap_download import earthquake_shakemap_download
 
 from shakemap_census_exposure import shakemap_into_census_geo
-from get_bldg_centroids import shakemap_get_bldgs
-from tract_damage_model import main as tract_damages
+
+# from get_bldg_centroids import shakemap_get_bldgs
+# from tract_damage_model import main as tract_damages
 import constants
 import logging
-from utils.duckdb_utils import initialize
+from utils.duckdb import initialize
 
 logging.basicConfig(level=logging.INFO)
 
@@ -33,10 +34,10 @@ def main(mmi_threshold: int = 4, test_mode: bool = False):
         shakemap_into_census_geo(eventdir=event)
 
         logging.info("Gathering Building Outlines for: ", event)
-        shakemap_get_bldgs(eventdir=event)
+        # shakemap_get_bldgs(eventdir=event)
 
         logging.info("Running Tract-Level Damage Assessment Model for: ", event)
-        tract_damages(eventdir=event)
+        # tract_damages(eventdir=event)
 
     return
 
