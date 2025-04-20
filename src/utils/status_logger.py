@@ -4,15 +4,16 @@ from utils.get_date import convert_to_timestamp
 
 
 def log_status(
-    event_id: str, status: str, timestamp: str, conn: duckdb.DuckDBPyConnection
+    event_id: str, status: str, timestamp: int, conn: duckdb.DuckDBPyConnection
 ) -> None:
     """
-    Update the event_info.txt file with a status and timestamp.
+    Update the event_log duckdb table with a status and timestamp
+    if the event_id doesn't already exist in the event_log.
 
     Args:
         event_id (str): event id
         status (str): event status
-        timestamp (str): timestamp
+        timestamp (int): timestamp of the status
         conn (duckdb.DuckDBPyConnection): duckdb connection
     """
 
@@ -26,7 +27,12 @@ def log_status(
         SELECT
             '{event_id}' AS event_id,
             '{status}' AS status,
-            TIMESTAMP '1970-01-01 00:00:00' + INTERVAL {timestamp} SECOND AS timestamp;""",
+            TIMESTAMP '1970-01-01 00:00:00' + INTERVAL {timestamp} SECOND AS timestamp
+        WHERE NOT EXISTS (
+            SELECT 1 FROM event_log
+            WHERE
+                event_id = '{event_id}'
+        );""",
     )
 
 

@@ -2,19 +2,31 @@ import os
 from utils.get_file_paths import get_shakemap_dir
 from utils.get_shakemap_files import get_shakemap_files
 import constants
+import duckdb
+import arcpy
+from configs.event import Event
 
 
-def shakemap_into_census_geo(event_dir=constants.NapaEventDir):
+def shakemap_into_census_geo(conn: duckdb.DuckDBPyConnection, event: Event) -> None:
+    """Splits the ShakeMap into relevant tracts.
+
+    Args:
+        conn (duckdb.DuckDBPyConnection): duckdb connection
+        event_id (str): event ID
+
+    Returns:
+        None
+    """
 
     # ShakeMap GIS File Folder
     shakemap_dir = get_shakemap_dir()
 
-    mi, pgv, pga = get_shakemap_files(event_dir)
-    unique = event_dir.split("\\")[-1]
+    mi, pgv, pga = get_shakemap_files(event.shakemap_dir)
+    unique = event.shakemap_dir.split("\\")[-1]
 
     # Variables for Census Geographies
     ###Blocks = #filepath
-    Tracts = os.path.join(
+    tracts = os.path.join(
         os.path.dirname(os.getcwd()),
         "Data",
         "tl_2019_us_tracts",
@@ -26,11 +38,6 @@ def shakemap_into_census_geo(event_dir=constants.NapaEventDir):
         "esri_2019_detailed_counties",
         "2019detailedcounties.shp",
     )
-
-    # Other layers/shapefiles
-    arcpy.management.CreateFileGDB(eventdir, "eqmodel_outputs")
-    arcpy.env.workspace = os.path.join(eventdir, "eqmodel_outputs.gdb")
-    GDB = os.path.join(eventdir, "eqmodel_outputs.gdb")
 
     # Clip all USGS ShakeMap GIS shapefiles to the county layer
     arcpy.Clip_analysis(

@@ -7,37 +7,38 @@ import time
 from constants import BLDG_PCT_BY_TRACT_TABLE, DAMAGE_FUNCTION_VARS_TABLE
 from utils.duckdb import initialize, execute
 
-# Import Spreadsheet with Hazus Building Type Breakdown per Tract
-conn = initialize()
-bldg_percentages_by_tract_df = execute(
-    conn, f"SELECT * FROM {BLDG_PCT_BY_TRACT_TABLE}"
-).fetchdf()
-
-# add leading zeroes to FIPS codes that do not have leading zeroes
-bldg_percentages_by_tract_df["Tract_str"] = bldg_percentages_by_tract_df["Tract"].apply(
-    str
-)
-for fips in bldg_percentages_by_tract_df["Tract_str"].unique():
-    if len(fips) == 11:
-        None
-    elif len(fips) == 10:
-        # add leading zero to fips string
-        newfips = "0" + fips
-        idx = bldg_percentages_by_tract_df[
-            bldg_percentages_by_tract_df["Tract_str"] == fips
-        ]["Tract_str"].index
-        bldg_percentages_by_tract_df.loc[idx, "Tract_str"] = newfips
-
-# Import Damage Function Variables Spreadsheet
-dmgfvarsDF = execute(conn, f"SELECT * FROM {DAMAGE_FUNCTION_VARS_TABLE}").fetchdf()
-dmgfvarsDF = dmgfvarsDF.drop("Unnamed: 0", axis=1)
-list_bldgtypes = dmgfvarsDF["BLDG_TYPE"].unique()
-
 
 def main(
+    conn: duckdb.DuckDBPyConnection,
     tracts_layer="census_tract_max_mmi_pga_pgv_bldgcount",
     eventdir=constants.IdahoEventDir,
 ):
+
+    # Import Spreadsheet with Hazus Building Type Breakdown per Tract
+    conn = initialize()
+    bldg_percentages_by_tract_df = execute(
+        conn, f"SELECT * FROM {BLDG_PCT_BY_TRACT_TABLE}"
+    ).fetchdf()
+
+    # add leading zeroes to FIPS codes that do not have leading zeroes
+    bldg_percentages_by_tract_df["Tract_str"] = bldg_percentages_by_tract_df[
+        "Tract"
+    ].apply(str)
+    for fips in bldg_percentages_by_tract_df["Tract_str"].unique():
+        if len(fips) == 11:
+            None
+        elif len(fips) == 10:
+            # add leading zero to fips string
+            newfips = "0" + fips
+            idx = bldg_percentages_by_tract_df[
+                bldg_percentages_by_tract_df["Tract_str"] == fips
+            ]["Tract_str"].index
+            bldg_percentages_by_tract_df.loc[idx, "Tract_str"] = newfips
+
+    # Import Damage Function Variables Spreadsheet
+    dmgfvarsDF = execute(conn, f"SELECT * FROM {DAMAGE_FUNCTION_VARS_TABLE}").fetchdf()
+    dmgfvarsDF = dmgfvarsDF.drop("Unnamed: 0", axis=1)
+    list_bldgtypes = dmgfvarsDF["BLDG_TYPE"].unique()
 
     gdb = os.path.join(eventdir, "eqmodel_outputs.gdb")
 

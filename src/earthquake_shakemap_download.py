@@ -11,8 +11,12 @@ from utils.get_file_paths import get_shakemap_dir
 from utils.status_logger import log_status, get_last_status
 from utils.get_date import convert_to_timestamp
 import logging
-from utils.duckdb import execute
+from utils.duckdb import execute, insert_gdf_into_table
 import duckdb
+from schemas.epicenters import primary_key as epicenters_pk, schema as epicenters_schema
+from schemas.shakemaps import primary_key as shakemaps_pk, schema as shakemaps_schema
+from configs.event import Event
+from configs.shakemap import ShakeMap
 
 logging.basicConfig(level=logging.INFO)
 
@@ -36,21 +40,29 @@ def get_data_from_url(url: str):
     return data
 
 
+def add_shakemap_layer_to_duckdb(
+    conn: duckdb.DuckDBPyConnection, event: Event, shapefile: str
+):
+
+    shp_path = os.path.join(event.shakemap_dir, f"{shapefile}.shp")
+    gdf = gpd.read_file(shp_path)
+    gdf["event_id"] = event.id
+    gdf["updated"] = event.properties.updated
+    gdf["dataset"] = shapefile
+    insert_gdf_into_table(conn, gdf, "shakemaps", shakemaps_schema, shakemaps_pk)
+
+
 def create_shakemap_gis_files(
-    event_id: str,
+    event: Event,
     shapezip_url: str,
-    event_dir: str,
-    earthquake_dict: dict,
     conn: duckdb.DuckDBPyConnection,
 ):
     """Extracts & unzips ShakeMap GIS Files. Converts the earthquake epicenter
     into a point shapefile.
 
     Args:
-        event_id(str): event id
+        event (Event): event base model
         shapezip_url (str): URL of the ShakeMap zip file
-        event_dir (str): filepath of the event dir where files will be extracted to
-        earthquake_dict (dict): earthquake json from the FEED URL
         conn (duckdb.DuckDBPyConnection): duckdb connection
     """
     data = get_data_from_url(shapezip_url)
@@ -61,147 +73,136 @@ def create_shakemap_gis_files(
     # Create a ZipFile object, instantiated with our file-like StringIO object.
     # Extract all of the Data from that StringIO object into files in the provided output directory.
     shakemap_zip = zipfile.ZipFile(zip_buffer, "r", zipfile.ZIP_DEFLATED)
-    shakemap_zip.extractall(event_dir)
+    shakemap_zip.extractall(event.shakemap_dir)
     shakemap_zip.close()
     zip_buffer.close()
 
-    # Create feature class of earthquake info
-    epi_x = earthquake_dict["geometry"]["coordinates"][0]
-    epi_y = earthquake_dict["geometry"]["coordinates"][1]
-    depth = earthquake_dict["geometry"]["coordinates"][2]
-    title = str(earthquake_dict["properties"]["title"])
-    mag = earthquake_dict["properties"]["mag"]
-    time = str(earthquake_dict["properties"]["time"])
-    time_pretty = datetime.fromtimestamp(int(time[:-3])).strftime("%c")
-    place = str(earthquake_dict["properties"]["place"])
-    url = str(earthquake_dict["properties"]["url"])
-    event_id = str(event_id)
-    status = str(earthquake_dict["properties"]["status"])
-    updated = str(earthquake_dict["properties"]["updated"])
-    updated_pretty = datetime.fromtimestamp(int(updated[:-3])).strftime("%c")
+    log_status(event.id, event.properties.status, event.properties.updated, conn)
 
-    log_status(event_id, status, updated, conn)
+    logging.info(
+        f"New event successfully downloaded: {event.id} | {event.properties.title}"
+    )
 
-    event_details = (title, mag, time_pretty, place, depth, url, event_id)
-    logging.info(f"New event successfully downloaded: {event_details}")
-
-    # update empty point with epicenter lat/long
-    epi = Point(epi_x, epi_y)
-
-    data = [
+    data_dict = [
         {
-            "event_id": event_id,
-            "title": title,
-            "magnitude": mag,
-            "date_time": time_pretty,
-            "place": place,
-            "depth_km": depth,
-            "url": url,
-            "status": status,
-            "updated": updated_pretty,
+            "event_id": event.id,
+            "title": event.properties.title,
+            "magnitude": event.properties.mag,
+            "date_time": event.properties.time_pretty,
+            "place": event.properties.mag,
+            "depth_km": event.geometry.depth,
+            "url": event.properties.url,
+            "status": event.properties.status,
+            "updated": event.properties.updated,
         }
     ]
-    event_gdf = gpd.GeoDataFrame(data, geometry=[epi])
-    event_gdf.to_file(os.path.join(event_dir, "epicenter.shp"))
 
-    # convert geometry to WKT
-    event_gdf["geometry"] = event_gdf["geometry"].apply(lambda geom: geom.wkt)
+    # update empty point with epicenter lat/long
+    epicenter = Point(event.geometry.lon, event.geometry.lat)
+    # convert to geodataframe
+    event_gdf = gpd.GeoDataFrame(data_dict, geometry=[epicenter])
+    event_gdf.to_file(os.path.join(event.shakemap_dir, "epicenter.shp"))
 
-    # insert shapefiles into duckdb shakemaps table
-    # register the gdf as a DuckDB table
-    conn.register("shakemap_gdf", event_gdf)
-    # persist it into DuckDB
-    execute(conn, "INSERT INTO shakemaps SELECT * FROM shakemap_gdf")
+    # add epicenter to epicenters table
+    insert_gdf_into_table(
+        conn, event_gdf, "epicenters", epicenters_schema, epicenters_pk
+    )
+
+    # add shakemap files to shakemaps table
+    for shp in ["mi", "pga", "pgv"]:
+        add_shakemap_layer_to_duckdb(conn, event, shp)
 
 
 def earthquake_shakemap_download(
-    conn: duckdb.DuckDBPyConnection, mmi_threshold: int = 4
+    conn: duckdb.DuckDBPyConnection, mmi_threshold: int = 4.0, overwrite: bool = False
 ) -> list:
     """Check for shakemaps using the uncommented FEEDURL.
 
     Args:
         conn (duckdb.DuckDBPyConnection): duckdb connection
         mmi_threshold (int): MMI threshold for earthquakes to download.
+        overwrite (bool): When true, overwrites existing files.
 
     Returns:
-        new_shakemap_folders (list): list of file paths for the data that was extracted
+        new_events (list): list of new events that were found & downloaded
     """
 
     shakemap_dir = get_shakemap_dir()
-    new_shakemap_folders = []
+    new_events = []
 
     # Get the data from the FEEDURL as a json dictionary
     data = get_data_from_url(FEEDURL)
     feed_dict = json.loads(data)
 
     for earthquake_dict in feed_dict["features"]:
-        event_id = earthquake_dict["id"]
+        event = Event(**earthquake_dict)
 
-        event_url = earthquake_dict["properties"]["detail"]
-        data = get_data_from_url(event_url)
+        if event.properties.mag < mmi_threshold:
+            logging.info(f"Skipping {event.id}: mag < {mmi_threshold}")
+            continue
+
+        data = get_data_from_url(event.properties.detail)
         shakemap_dict = json.loads(data)
-        if shakemap_dict["properties"]["mag"] < mmi_threshold:
-            logging.info(f"Skipping {event_id}: mag < {mmi_threshold}")
-            continue
+
         if "shakemap" not in shakemap_dict["properties"]["products"].keys():
-            logging.info(f"Skipping {event_id}: no shakemap available")
+            logging.info(f"Skipping {event.id}: no shakemap available")
             continue
 
-        [lon, lat] = shakemap_dict["geometry"]["coordinates"][0:2]
-        in_conus = check_coords(lat, lon)
+        shakemap = ShakeMap(**shakemap_dict["properties"]["products"]["shakemap"][0])
+
+        in_conus = check_coords(event.geometry.lat, event.geometry.lon)
         if not in_conus:
-            logging.info("Skipping {}: epicenter not in conus".format(event_id))
+            logging.info("Skipping {}: epicenter not in conus".format(event.id))
             continue
 
         # get the first shakemap associated with the event
-        shakemap = shakemap_dict["properties"]["products"]["shakemap"][0]
-        # get the download url for the shape zipfile
-        shapezip_url = shakemap["contents"]["download/shape.zip"]["url"]
 
-        event_dir = os.path.join(shakemap_dir, str(event_id))
+        # get the download url for the shape zipfile
+        shapezip_url = shakemap.contents["download/shape.zip"].url
+        event_dir = os.path.join(shakemap_dir, event.id)
 
         # Creates a new folder (named the eventid) if it does not already exist
         result_df = execute(
-            conn, f"SELECT * FROM shakemaps WHERE event_id = '{event_id}';"
+            conn, f"SELECT * FROM shakemaps WHERE event_id = '{event.id}';"
         ).fetchdf()
-        if len(result_df) < 1:
-            os.mkdir(event_dir)
-            logging.info("New Event ID: {event_dir} - Downloading.")
+        if (len(result_df) < 1) or overwrite:
+            if not os.path.exists(event.shakemap_dir):
+                os.mkdir(event.shakemap_dir)
+            logging.info(f"Downloading Event ID: {event.id} to: {event.shakemap_dir}")
 
-            create_shakemap_gis_files(
-                event_id, shapezip_url, event_dir, earthquake_dict, conn
+            create_shakemap_gis_files(event, shapezip_url, conn)
+
+            file_list = os.listdir(event.shakemap_dir)
+            logging.info(
+                f"Extracted {len(file_list)} ShakeMap files to {event.shakemap_dir}"
             )
-
-            file_list = os.listdir(event_dir)
-            logging.info(f"Extracted {len(file_list)} ShakeMap files to {event_dir}")
-            new_shakemap_folders.append(event_dir)
+            new_events.append(event)
 
         else:
             logging.info(
-                f"Event ID {event_id} exists in shakemaps table already. Checking for udpates."
+                f"Event ID {event.id} exists in shakemaps table already. Checking for updates."
             )
 
-            old_status, old_updated = get_last_status(event_id, conn)
-
-            status = str(earthquake_dict["properties"]["status"])
-            updated = str(earthquake_dict["properties"]["updated"])
+            old_status, old_updated = get_last_status(event.id, conn)
 
             # check to see if new dataset has been updated or has a new status
             status_change = False
             recent_update = False
 
-            if status != old_status:
+            if event.properties.status != old_status:
                 status_change = True
 
             if (
-                datetime.fromtimestamp(int(convert_to_timestamp(updated)) / 1000)
+                datetime.fromtimestamp(
+                    int(convert_to_timestamp(event.properties.updated)) / 1000
+                )
                 > old_updated
             ):
                 recent_update = True
 
             if recent_update or status_change:
 
-                logging.info(f"Status update found for Event ID {event_id}.")
+                logging.info(f"Status update found for Event ID {event.id}.")
 
                 # create archive subdirectory
                 list_subfolders = [f.name for f in os.scandir(event_dir) if f.is_dir()]
@@ -237,13 +238,11 @@ def earthquake_shakemap_download(
                         os.remove(os.path.join(event_dir, file))
 
                 logging.info(
-                    f"Previously downloaded ShakeMap files for {event_id} have been archived."
+                    f"Previously downloaded ShakeMap files for {event.id} have been archived."
                 )
 
-                logging.info(f"Downloading new shakemaps for Event ID: {event_id}")
-                create_shakemap_gis_files(
-                    event_id, shapezip_url, event_dir, earthquake_dict
-                )
+                logging.info(f"Downloading new shakemaps for Event ID: {event.id}")
+                create_shakemap_gis_files(event, shapezip_url, conn)
 
                 filecount = [
                     f
@@ -253,14 +252,14 @@ def earthquake_shakemap_download(
                 logging.info(
                     f"Successfully downloaded {len(filecount)} ShakeMap files to {event_dir}"
                 )
-                new_shakemap_folders.append(event_dir)
+                new_events(event)
 
             else:
 
                 logging.info(
-                    f"ShakeMap files for {event_id} already exist and have not been updated."
+                    f"ShakeMap files for {event.id} already exist and have not been updated."
                 )
 
     logging.info("Completed.")
 
-    return new_shakemap_folders
+    return new_events

@@ -4,8 +4,8 @@ EVENT_INFO_FILE = "event_info.txt"
 BuildingCentroids = "data/ORNL_USAStructures_Centroids_LightboxSpatialJoin.gdb"
 
 # For testing mode, update the file paths for the Napa and Idaho directories
-NapaEventDir = "data/testing/napa2014shakemap_fortesting"
-IdahoEventDir = "data/testing/idaho2017shakemap_fortesting"
+NapaEventDir = "data/testing/napa2014shakemap"
+IdahoEventDir = "data/testing/idaho2017shakemap"
 
 # duckdb table names
 DAMAGE_FUNCTION_VARS_TABLE = "damage_function_vars"
