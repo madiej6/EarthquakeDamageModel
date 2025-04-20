@@ -1,8 +1,8 @@
 # EarthquakeDamageModel
 
-#### System Requirements:
-- ArcGIS Pro 2.7+
-- Windows 10
+# TO-DO:
+- Convert entire model to open source (geopandas instead of arcpy)
+- Convert usage of text files to duckdb
 
 #### Data Downloads:
 The following supplemental data sets will need to be downloaded and stored in the "EarthquakeModel\Data" folder with the following names:
@@ -37,8 +37,7 @@ To run the model in testing mode:
 
 #### Instructions to set up the environment and run the program:
 
-- Future versions of this code will be open source (non-arcpy dependent).
-- For now, use [this link](https://support.esri.com/en/technical-article/000020560) for instructions to clone your ArcGIS Pro Python environment, and then install requirements.txt in the cloned environment.
+- Set up a conda environment using the requirements.txt file
 - Then, in terminal run the following lines to kickoff the Earthquake Model:
 `conda activate <env-name>`
 `python main.py`
