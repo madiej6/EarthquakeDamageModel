@@ -1,7 +1,13 @@
 import datetime
+import numpy as np
+
 
 def get_date():
-    
-    date_today = datetime.date.today().strftime("%m%d%Y")  # Creates date string in format 'MMDDYYYY'
+    # Creates date string in format 'MMDDYYYY'
 
-    return date_today
+    return datetime.date.today().strftime("%m%d%Y")
+
+
+def convert_to_timestamp(timestamp: str):
+    timestamp = int(np.ceil(int(timestamp) / 1000))
+    return timestamp
