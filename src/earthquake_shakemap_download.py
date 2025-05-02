@@ -17,12 +17,9 @@ from schemas.epicenters import primary_key as epicenters_pk, schema as epicenter
 from schemas.shakemaps import primary_key as shakemaps_pk, schema as shakemaps_schema
 from configs.event import Event
 from configs.shakemap import ShakeMap
+from constants import FEEDURL
 
 logging.basicConfig(level=logging.INFO)
-
-FEEDURL = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/significant_week.geojson"  # Significant Events - 1 week
-# FEEDURL = 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/4.5_hour.geojson' #1 hour M4.5+
-# FEEDURL = 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/4.5_day.geojson' #1 day M4.5+
 
 
 def get_data_from_url(url: str):
@@ -53,35 +50,40 @@ def add_shakemap_layer_to_duckdb(
 
 
 def create_shakemap_gis_files(
-    event: Event,
-    shapezip_url: str,
     conn: duckdb.DuckDBPyConnection,
+    event: Event,
+    shapezip_url: str = None,
+    test: bool = False,
 ):
     """Extracts & unzips ShakeMap GIS Files. Converts the earthquake epicenter
     into a point shapefile.
 
     Args:
+        conn (duckdb.DuckDBPyConnection): duckdb connection
         event (Event): event base model
         shapezip_url (str): URL of the ShakeMap zip file
-        conn (duckdb.DuckDBPyConnection): duckdb connection
+        test (bool): whether or not to run in test mode, False by default
     """
-    data = get_data_from_url(shapezip_url)
+    if not test:
+        assert shapezip_url, "missing parameter: shapezip_url"
 
-    # Create a StringIO object, which behaves like a file
-    zip_buffer = io.BytesIO(data)
+        data = get_data_from_url(shapezip_url)
 
-    # Create a ZipFile object, instantiated with our file-like StringIO object.
-    # Extract all of the Data from that StringIO object into files in the provided output directory.
-    shakemap_zip = zipfile.ZipFile(zip_buffer, "r", zipfile.ZIP_DEFLATED)
-    shakemap_zip.extractall(event.shakemap_dir)
-    shakemap_zip.close()
-    zip_buffer.close()
+        # Create a StringIO object, which behaves like a file
+        zip_buffer = io.BytesIO(data)
+
+        # Create a ZipFile object, instantiated with our file-like StringIO object.
+        # Extract all of the Data from that StringIO object into files in the provided output directory.
+        shakemap_zip = zipfile.ZipFile(zip_buffer, "r", zipfile.ZIP_DEFLATED)
+        shakemap_zip.extractall(event.shakemap_dir)
+        shakemap_zip.close()
+        zip_buffer.close()
+
+        logging.info(
+            f"New event successfully downloaded: {event.id} | {event.properties.title}"
+        )
 
     log_status(event.id, event.properties.status, event.properties.updated, conn)
-
-    logging.info(
-        f"New event successfully downloaded: {event.id} | {event.properties.title}"
-    )
 
     data_dict = [
         {
@@ -155,8 +157,6 @@ def earthquake_shakemap_download(
             logging.info("Skipping {}: epicenter not in conus".format(event.id))
             continue
 
-        # get the first shakemap associated with the event
-
         # get the download url for the shape zipfile
         shapezip_url = shakemap.contents["download/shape.zip"].url
         event_dir = os.path.join(shakemap_dir, event.id)
@@ -170,7 +170,7 @@ def earthquake_shakemap_download(
                 os.mkdir(event.shakemap_dir)
             logging.info(f"Downloading Event ID: {event.id} to: {event.shakemap_dir}")
 
-            create_shakemap_gis_files(event, shapezip_url, conn)
+            create_shakemap_gis_files(conn, event, shapezip_url)
 
             file_list = os.listdir(event.shakemap_dir)
             logging.info(
@@ -242,7 +242,7 @@ def earthquake_shakemap_download(
                 )
 
                 logging.info(f"Downloading new shakemaps for Event ID: {event.id}")
-                create_shakemap_gis_files(event, shapezip_url, conn)
+                create_shakemap_gis_files(conn, event, shapezip_url)
 
                 filecount = [
                     f

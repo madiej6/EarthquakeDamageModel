@@ -1,360 +1,107 @@
 import os
-from utils.get_file_paths import get_shakemap_dir
-from utils.get_shakemap_files import get_shakemap_files
-import constants
+import numpy as np
+import geopandas as gpd
 import duckdb
-import arcpy
 from configs.event import Event
+from utils.duckdb import execute
 
 
-def shakemap_into_census_geo(conn: duckdb.DuckDBPyConnection, event: Event) -> None:
-    """Splits the ShakeMap into relevant tracts.
+def shakemap_into_census_geo(
+    conn: duckdb.DuckDBPyConnection, event: Event, census_geo: str
+) -> None:
+    """Joins the ShakeMap values for MMI, PGA and PGV onto census geographies.
+
+    For all values (MMI, PGA, and PGV), the min/max/avg values are joined to the census geo.
+    For example, if a county intersects with 3 MMI values, the columns 'MMI_min', 'MMI_max',
+    and 'MMI_avg' will all be populated accordingly.
 
     Args:
         conn (duckdb.DuckDBPyConnection): duckdb connection
-        event_id (str): event ID
+        event (Event): pydantic base model
+        census_geo (str): the census geography i.e. 'tracts', 'counties', etc.
 
     Returns:
         None
     """
 
-    # ShakeMap GIS File Folder
-    shakemap_dir = get_shakemap_dir()
+    gdfs_to_consolidate = []
+    for dataset in ["mi", "pga", "pgv"]:
 
-    mi, pgv, pga = get_shakemap_files(event.shakemap_dir)
-    unique = event.shakemap_dir.split("\\")[-1]
+        if dataset == "mi":
+            new_col_name = "MMI"
+        else:
+            new_col_name = dataset.upper()
 
-    # Variables for Census Geographies
-    ###Blocks = #filepath
-    tracts = os.path.join(
-        os.path.dirname(os.getcwd()),
-        "Data",
-        "tl_2019_us_tracts",
-        "2019censustracts.shp",
-    )
-    DetailCounties = os.path.join(
-        os.path.dirname(os.getcwd()),
-        "Data",
-        "esri_2019_detailed_counties",
-        "2019detailedcounties.shp",
-    )
+        gdf = execute(
+            conn,
+            f"""
+        WITH shakemap_extent AS
+            (SELECT
+                event_id,
+                ST_Union_Agg(ST_GEOMFROMTEXT(geometry)) AS geometry
+            FROM shakemaps
+            WHERE event_id = '{event.id}' and dataset='{dataset}'
+            GROUP BY event_id),
+        subset_geo AS (
+            SELECT
+                {census_geo}_2024.GEOID,
+                ST_GEOMFROMTEXT({census_geo}_2024.geometry) AS geometry
+            FROM {census_geo}_2024 JOIN shakemap_extent
+            ON ST_INTERSECTS(ST_GEOMFROMTEXT({census_geo}_2024.geometry),shakemap_extent.geometry)),
+        shakemap AS (
+            SELECT
+                event_id,
+                PARAMVALUE AS {new_col_name},
+                ST_GEOMFROMTEXT(geometry) AS geometry
+            FROM shakemaps
+            WHERE event_id = '{event.id}' and dataset='{dataset}'),
+        final AS (
+            SELECT
+                subset_geo.GEOID,
+                subset_geo.geometry,
+                shakemap.event_id,
+                shakemap.{new_col_name}
+            FROM subset_geo JOIN shakemap
+            ON ST_INTERSECTS(subset_geo.geometry, shakemap.geometry))
+        SELECT
+            GEOID,
+            ANY_VALUE(event_id) AS event_id,
+            ST_ASTEXT(ANY_VALUE(geometry)) AS geometry,
+            MAX({new_col_name}) AS {new_col_name}_max,
+            MIN({new_col_name}) AS {new_col_name}_min,
+            AVG({new_col_name}) AS {new_col_name}_avg,
+        FROM final
+        GROUP BY GEOID;
+        """,
+        ).fetchdf()
 
-    # Clip all USGS ShakeMap GIS shapefiles to the county layer
-    arcpy.Clip_analysis(
-        mi, DetailCounties, os.path.join(GDB, "shakemap_countyclip_mmi")
-    )
-    arcpy.Clip_analysis(
-        pgv, DetailCounties, os.path.join(GDB, "shakemap_countyclip_pgv")
-    )
-    arcpy.Clip_analysis(
-        pga, DetailCounties, os.path.join(GDB, "shakemap_countyclip_pga")
-    )
+        gdf["geometry"] = gpd.GeoSeries.from_wkt(gdf["geometry"])
+        gdf = gpd.GeoDataFrame(gdf, crs="EPSG:4326")
 
-    arcpy.AddField_management(
-        os.path.join(GDB, "shakemap_countyclip_mmi"),
-        "MMI_int",
-        "SHORT",
-        "",
-        "",
-        "",
-        "MMI_int",
-    )
-    arcpy.CalculateField_management(
-        os.path.join(GDB, "shakemap_countyclip_mmi"),
-        "MMI_int",
-        "math.floor( !PARAMVALUE! )",
-        "PYTHON_9.3",
-        "",
-    )
-    arcpy.Dissolve_management(
-        os.path.join(GDB, "shakemap_countyclip_mmi"),
-        os.path.join(GDB, "shakemap_countyclip_mmi_int"),
-        "MMI_int",
-        "",
-        "MULTI_PART",
-        "DISSOLVE_LINES",
-    )
+        gdfs_to_consolidate.append(gdf)
 
-    # need to make layers for all of these before doing spatial join
-    arcpy.MakeFeatureLayer_management(DetailCounties, "Counties_lyr_{}".format(unique))
-    arcpy.MakeFeatureLayer_management(Tracts, "Tracts_lyr_{}".format(unique))
-    # arcpy.MakeFeatureLayer_management(Blocks,"Blocks_lyr_{}".format(unique))
-
-    # Select Counties That Intersect with USGS ShakeMap GIS shapefiles
-    SelectedCounties = arcpy.SelectLayerByLocation_management(
-        "Counties_lyr_{}".format(unique), "INTERSECT", mi, "", "NEW_SELECTION"
-    )
-
-    def set_field_mappings_withmax(layer1, layer2, field_to_max, new_field_name):
-        fieldmappings = arcpy.FieldMappings()
-        fieldmappings.addTable(layer1)  # SelectedCounties
-        fieldmappings.addTable(layer2)  # mmi
-        FieldIndex_toMax = fieldmappings.findFieldMapIndex(field_to_max)  # "PARAMVALUE"
-        fieldmap = fieldmappings.getFieldMap(FieldIndex_toMax)
-        field = fieldmap.outputField
-        field.name = new_field_name  # "max_MMI"
-        field.aliasName = new_field_name  # "max_MMI"
-        fieldmap.outputField = field
-        fieldmap.mergeRule = "max"
-        fieldmappings.replaceFieldMap(FieldIndex_toMax, fieldmap)
-        return fieldmappings
-
-    def set_field_mappings_withmin(layer1, layer2, field_to_min, new_field_name):
-        fieldmappings = arcpy.FieldMappings()
-        fieldmappings.addTable(layer1)  # SelectedCounties
-        fieldmappings.addTable(layer2)  # mmi
-        FieldIndex_toMin = fieldmappings.findFieldMapIndex(field_to_min)  # "PARAMVALUE"
-        fieldmap = fieldmappings.getFieldMap(FieldIndex_toMin)
-        field = fieldmap.outputField
-        field.name = new_field_name  # "min_MMI"
-        field.aliasName = new_field_name  # "min_MMI"
-        fieldmap.outputField = field
-        fieldmap.mergeRule = "min"
-        fieldmappings.replaceFieldMap(FieldIndex_toMin, fieldmap)
-        return fieldmappings
-
-    def set_field_mappings_withmean(layer1, layer2, field_to_mean, new_field_name):
-        fieldmappings = arcpy.FieldMappings()
-        fieldmappings.addTable(layer1)  # SelectedCounties
-        fieldmappings.addTable(layer2)  # mmi
-        FieldIndex_toMean = fieldmappings.findFieldMapIndex(
-            field_to_mean
-        )  # "PARAMVALUE"
-        fieldmap = fieldmappings.getFieldMap(FieldIndex_toMean)
-        field = fieldmap.outputField
-        field.name = new_field_name  # "mean_MMI"
-        field.aliasName = new_field_name  # "mean_MMI"
-        fieldmap.outputField = field
-        fieldmap.mergeRule = "mean"
-        fieldmappings.replaceFieldMap(FieldIndex_toMean, fieldmap)
-        return fieldmappings
-
-    def remove_field_map(fieldmappings, listoffields):
-        for F in listoffields:
-            x = fieldmappings.findFieldMapIndex(F)
-            fieldmappings.removeFieldMap(x)
-        return
-
-    # maxMMI
-    fieldmappings = set_field_mappings_withmax(
-        SelectedCounties, mi, "PARAMVALUE", "max_MMI"
-    )
-    remove_field_map(
-        fieldmappings, ["AREA", "PERIMETER", "PGAPOL_", "PGAPOL_ID", "GRID_CODE"]
-    )
-
-    # Spatial Join MAX MI to each County
-    arcpy.SpatialJoin_analysis(
-        target_features=SelectedCounties,
-        join_features=mi,
-        out_feature_class=os.path.join(GDB, "census_county_max_mmi"),
-        join_operation="JOIN_ONE_TO_ONE",
-        join_type="KEEP_ALL",
-        field_mapping=fieldmappings,
-    )
-
-    # maxPGA
-    fieldmappings = set_field_mappings_withmax(
-        os.path.join(GDB, "census_county_max_mmi"), pga, "PARAMVALUE", "max_PGA"
-    )
-    remove_field_map(
-        fieldmappings, ["AREA", "PERIMETER", "PGAPOL_", "PGAPOL_ID", "GRID_CODE"]
-    )
-
-    # Spatial Join MAX PGA to each County
-    arcpy.SpatialJoin_analysis(
-        target_features=os.path.join(GDB, "census_county_max_mmi"),
-        join_features=pga,
-        out_feature_class=os.path.join(GDB, "census_county_max_mmi_pga"),
-        join_operation="JOIN_ONE_TO_ONE",
-        join_type="KEEP_ALL",
-        field_mapping=fieldmappings,
-    )
-
-    # minPGA
-    fieldmappings = set_field_mappings_withmin(
-        os.path.join(GDB, "census_county_max_mmi_pga"), pga, "PARAMVALUE", "min_PGA"
-    )
-    remove_field_map(
-        fieldmappings, ["AREA", "PERIMETER", "PGAPOL_", "PGAPOL_ID", "GRID_CODE"]
-    )
-
-    # Spatial Join MAX PGV to each County
-    arcpy.SpatialJoin_analysis(
-        target_features=os.path.join(GDB, "census_county_max_mmi_pga"),
-        join_features=pga,
-        out_feature_class=os.path.join(GDB, "census_county_max_mmi_pga_"),
-        join_operation="JOIN_ONE_TO_ONE",
-        join_type="KEEP_ALL",
-        field_mapping=fieldmappings,
-    )
-
-    # maxPGV
-    fieldmappings = set_field_mappings_withmax(
-        os.path.join(GDB, "census_county_max_mmi_pga_"), pgv, "PARAMVALUE", "max_PGV"
-    )
-    remove_field_map(
-        fieldmappings, ["AREA", "PERIMETER", "PGAPOL_", "PGAPOL_ID", "GRID_CODE"]
-    )
-
-    # Spatial Join MAX PGV to each County
-    arcpy.SpatialJoin_analysis(
-        target_features=os.path.join(GDB, "census_county_max_mmi_pga_"),
-        join_features=pgv,
-        out_feature_class=os.path.join(GDB, "census_county_max_mmi_pga_pgv"),
-        join_operation="JOIN_ONE_TO_ONE",
-        join_type="KEEP_ALL",
-        field_mapping=fieldmappings,
-    )
-
-    # Get MI as Integer Field
-    arcpy.AddField_management(
-        os.path.join(GDB, "census_county_max_mmi_pga_pgv"),
-        "max_MMI_int",
-        "SHORT",
-        "",
-        "",
-        "",
-        "max_MMI_int",
-    )
-    arcpy.CalculateField_management(
-        os.path.join(GDB, "census_county_max_mmi_pga_pgv"),
-        "max_MMI_int",
-        "math.floor( !max_MMI! )",
-        "PYTHON_9.3",
-        "",
-    )
-
-    # Delete PGA and PGV county feature classes
-    arcpy.Delete_management(os.path.join(GDB, "census_county_max_mmi_pga_"))
-    arcpy.Delete_management(os.path.join(GDB, "census_county_max_mmi_pga"))
-    arcpy.Delete_management(os.path.join(GDB, "census_county_max_mmi"))
-
-    ############################### TRACTS ####################################
-
-    # Select Tracts That Intersect with USGS ShakeMap GIS shapefiles
-    SelectedTracts = arcpy.SelectLayerByLocation_management(
-        "Tracts_lyr_{}".format(unique), "INTERSECT", mi, "", "NEW_SELECTION"
-    )
-
-    # maxMMI
-    fieldmappings = set_field_mappings_withmax(
-        SelectedTracts, mi, "PARAMVALUE", "max_MMI"
-    )
-    remove_field_map(
-        fieldmappings, ["AREA", "PERIMETER", "PGAPOL_", "PGAPOL_ID", "GRID_CODE"]
-    )
-    # Spatial Join MAX MI to each Tract
-    arcpy.SpatialJoin_analysis(
-        target_features=SelectedTracts,
-        join_features=mi,
-        out_feature_class=os.path.join(GDB, "census_tract_max_mmi"),
-        join_operation="JOIN_ONE_TO_ONE",
-        join_type="KEEP_ALL",
-        field_mapping=fieldmappings,
-    )
-
-    # maxPGA
-    fieldmappings = set_field_mappings_withmax(
-        os.path.join(GDB, "census_tract_max_mmi"), pga, "PARAMVALUE", "max_PGA"
-    )
-    remove_field_map(
-        fieldmappings, ["AREA", "PERIMETER", "PGAPOL_", "PGAPOL_ID", "GRID_CODE"]
-    )
-    # Spatial Join MAX PGA to each Tract
-    arcpy.SpatialJoin_analysis(
-        target_features=os.path.join(GDB, "census_tract_max_mmi"),
-        join_features=pga,
-        out_feature_class=os.path.join(GDB, "census_tract_max_mmi_pga"),
-        join_operation="JOIN_ONE_TO_ONE",
-        join_type="KEEP_ALL",
-        field_mapping=fieldmappings,
-    )
-
-    # minPGA
-    fieldmappings = set_field_mappings_withmin(
-        os.path.join(GDB, "census_tract_max_mmi_pga"), pga, "PARAMVALUE", "min_PGA"
-    )
-    remove_field_map(
-        fieldmappings, ["AREA", "PERIMETER", "PGAPOL_", "PGAPOL_ID", "GRID_CODE"]
-    )
-    # Spatial Join MAX PGA to each Tract
-    arcpy.SpatialJoin_analysis(
-        target_features=os.path.join(GDB, "census_tract_max_mmi_pga"),
-        join_features=pga,
-        out_feature_class=os.path.join(GDB, "census_tract_max_mmi_pga_"),
-        join_operation="JOIN_ONE_TO_ONE",
-        join_type="KEEP_ALL",
-        field_mapping=fieldmappings,
-    )
-
-    # meanPGA
-    fieldmappings = set_field_mappings_withmean(
-        os.path.join(GDB, "census_tract_max_mmi_pga_"), pga, "PARAMVALUE", "mean_PGA"
-    )
-    remove_field_map(
-        fieldmappings, ["AREA", "PERIMETER", "PGAPOL_", "PGAPOL_ID", "GRID_CODE"]
-    )
-    # Spatial Join MAX PGV to each Tract
-    arcpy.SpatialJoin_analysis(
-        target_features=os.path.join(GDB, "census_tract_max_mmi_pga_"),
-        join_features=pga,
-        out_feature_class=os.path.join(GDB, "census_tract_max_mmi_pga__"),
-        join_operation="JOIN_ONE_TO_ONE",
-        join_type="KEEP_ALL",
-        field_mapping=fieldmappings,
-    )
-
-    # maxPGV
-    fieldmappings = set_field_mappings_withmax(
-        os.path.join(GDB, "census_tract_max_mmi_pga__"), pgv, "PARAMVALUE", "max_PGV"
-    )
-    remove_field_map(
-        fieldmappings, ["AREA", "PERIMETER", "PGAPOL_", "PGAPOL_ID", "GRID_CODE"]
-    )
-    # Spatial Join MAX PGV to each Tract
-    arcpy.SpatialJoin_analysis(
-        target_features=os.path.join(GDB, "census_tract_max_mmi_pga__"),
-        join_features=pgv,
-        out_feature_class=os.path.join(GDB, "census_tract_max_mmi_pga_pgv"),
-        join_operation="JOIN_ONE_TO_ONE",
-        join_type="KEEP_ALL",
-        field_mapping=fieldmappings,
-    )
-
-    # Get MI as Integer Field
-    arcpy.AddField_management(
-        os.path.join(GDB, "census_tract_max_mmi_pga_pgv"),
-        "max_MMI_int",
-        "SHORT",
-        "",
-        "",
-        "",
-        "max_MMI_int",
-    )
-    arcpy.CalculateField_management(
-        os.path.join(GDB, "census_tract_max_mmi_pga_pgv"),
-        "max_MMI_int",
-        "math.floor( !max_MMI! )",
-        "PYTHON_9.3",
-        "",
-    )
-
-    # Delete PGA and PGV tract feature classes
-    arcpy.Delete_management(os.path.join(GDB, "census_tract_max_mmi_pga__"))
-    arcpy.Delete_management(os.path.join(GDB, "census_tract_max_mmi_pga_"))
-    arcpy.Delete_management(os.path.join(GDB, "census_tract_max_mmi_pga"))
-    arcpy.Delete_management(os.path.join(GDB, "census_tract_max_mmi"))
-
-    # Copy over epicenter file if it exists
-    if os.path.exists(os.path.join(eventdir, "Epicenter.shp")):
-        # arcpy.MakeFeatureLayer_management(ShakeMapDir+"\Epicenter.shp","Epicenter_lyr")
-        arcpy.CopyFeatures_management(
-            os.path.join(eventdir, "Epicenter.shp"), os.path.join(GDB, "epicenter")
+    # join all shakemap min/max/avg cols for MMI, PGA & PGV together into single geodataframe
+    gdf = (
+        gdfs_to_consolidate[0]
+        .set_index("GEOID")
+        .join(
+            gdfs_to_consolidate[1][
+                ["GEOID", "PGA_max", "PGA_min", "PGA_avg"]
+            ].set_index("GEOID"),
+            how="left",
         )
+        .join(
+            gdfs_to_consolidate[2][
+                ["GEOID", "PGV_max", "PGV_min", "PGV_avg"]
+            ].set_index("GEOID"),
+            how="left",
+        )
+    )
 
-    return
+    # add an "integer" MMI with this math: "math.floor( !max_MMI! )",
+    gdf["MMI_int"] = np.floor(gdf["MMI_max"])
 
+    # save as shapefile
+    gdf.to_file(os.path.join(event.shakemap_dir, f"{census_geo}_2024_{event.id}.shp"))
 
-if __name__ == "__main__":
-    shakemap_into_census_geo()
+    # TO DO: save to duckdb table

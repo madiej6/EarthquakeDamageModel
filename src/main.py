@@ -1,15 +1,20 @@
 import time
 import argparse
+import os
+from utils.yaml import load_config_from_yaml
 
-from earthquake_shakemap_download import earthquake_shakemap_download
+from earthquake_shakemap_download import (
+    earthquake_shakemap_download,
+    create_shakemap_gis_files,
+)
 
 from shakemap_census_exposure import shakemap_into_census_geo
 
 # from get_bldg_centroids import shakemap_get_bldgs
 # from tract_damage_model import main as tract_damages
-import constants
 import logging
 from utils.duckdb import initialize
+from configs.event import Event
 
 logging.basicConfig(level=logging.INFO)
 
@@ -26,12 +31,17 @@ def main(mmi_threshold: int = 4.0, test_mode: bool = False, overwrite: bool = Fa
     else:
         # if testing mode, use the napa 2014 shakemap
         logging.info("testing mode")
+        data = load_config_from_yaml(
+            os.path.join("data", "testing", "napa2014", "event_config.yaml")
+        )
+        event = Event(**data)
+        create_shakemap_gis_files(conn, event, test=test_mode)
         # new_events = [constants.NapaEventDir]
-        new_events = [constants.IdahoEventDir]
+        new_events = [event]
 
     for event in new_events:
         logging.info("Census Data Processing for: ", event.id)
-        shakemap_into_census_geo(conn, event)
+        shakemap_into_census_geo(conn, event, "tracts")
 
         logging.info("Gathering Building Outlines for: ", event.id)
         # shakemap_get_bldgs(event_id=event_id)

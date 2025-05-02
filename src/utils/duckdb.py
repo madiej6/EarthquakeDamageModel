@@ -89,19 +89,19 @@ def spatial_extension(conn: duckdb.DuckDBPyConnection):
 
     # Check if the spatial extension is installed
     try:
-        conn.execute("LOAD SPATIAL;")
+        execute(conn, "LOAD SPATIAL;")
         print("Spatial extension is installed.")
     except duckdb.IOException:
         print("Spatial extension is NOT installed.")
-        conn.install_extension("spatial")
-
-    conn.load_extension("spatial")
+        execute(conn, "INSTSLL SPATIAL;")
+        execute(conn, "LOAD SPATIAL;")
 
     return conn
 
 
 def initialize(rebuild_tables: bool = False):
     conn = duckdb.connect(DB_PATH)
+    spatial_extension(conn)
     table_cleanup(conn)
     create_tables(conn, rebuild_tables)
     return conn
