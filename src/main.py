@@ -26,7 +26,7 @@ def main(mmi_threshold: int = 4.0, test_mode: bool = False, overwrite: bool = Fa
     if not test_mode:
         # if not in testing mode, look for real new shakemaps
         new_events = earthquake_shakemap_download(conn, mmi_threshold, overwrite)
-        # new events should be a list of newly downloaded earthquake event folders
+        # new events is a list of newly downloaded earthquake event folders
 
     else:
         # if testing mode, use the napa 2014 shakemap
@@ -36,7 +36,6 @@ def main(mmi_threshold: int = 4.0, test_mode: bool = False, overwrite: bool = Fa
         )
         event = Event(**data)
         create_shakemap_gis_files(conn, event, test=test_mode)
-        # new_events = [constants.NapaEventDir]
         new_events = [event]
 
     for event in new_events:

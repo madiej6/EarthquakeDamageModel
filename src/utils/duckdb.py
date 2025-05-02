@@ -16,6 +16,10 @@ from schemas.shakemaps import (
     schema as shakemaps_schema,
     primary_key as shakemaps_primary_key,
 )
+from schemas.census_geo_exposure import (
+    schema as census_geo_exposure_schema,
+    primary_key as census_geo_exposure_primary_key,
+)
 
 
 logging.basicConfig(level=logging.INFO)
@@ -136,4 +140,12 @@ def create_tables(conn: duckdb.DuckDBPyConnection, replace: bool = False):
     execute(
         conn,
         f"{create_statement} shakemaps ({', '.join(shakemap_schema_duckdb)}, PRIMARY KEY ({', '.join(shakemaps_primary_key)}));",
+    )
+    census_geo_exposure_schema_duckdb = [
+        f"{col} {type}" for col, type in census_geo_exposure_schema.items()
+    ]
+    execute(
+        conn,
+        f"""{create_statement} census_geo_exposure ({', '.join(census_geo_exposure_schema_duckdb)},
+        PRIMARY KEY ({', '.join(census_geo_exposure_primary_key)}));""",
     )
