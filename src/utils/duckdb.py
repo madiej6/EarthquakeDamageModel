@@ -1,25 +1,14 @@
 import duckdb
 import os
 import logging
-from typing import List, Dict
 import geopandas as gpd
 from constants import (
     EVENT_INFO_TABLE,
     DAMAGE_FUNCTION_VARS_TABLE,
     BLDG_PCT_BY_TRACT_TABLE,
+    ALL_SCHEMAS_PATH,
 )
-from schemas.epicenters import (
-    schema as epicenters_schema,
-    primary_key as epicenters_primary_key,
-)
-from schemas.shakemaps import (
-    schema as shakemaps_schema,
-    primary_key as shakemaps_primary_key,
-)
-from schemas.census_geo_exposure import (
-    schema as census_geo_exposure_schema,
-    primary_key as census_geo_exposure_primary_key,
-)
+from configs.schemas import SchemaConfig, TableSchema
 
 
 logging.basicConfig(level=logging.INFO)
@@ -34,18 +23,17 @@ BLDG_PCTS_PER_TRACT_PATH = os.path.join(
 
 
 def table_cleanup(conn: duckdb.DuckDBPyConnection):
-    execute(conn, "DROP TABLE shakemaps;")
-    execute(conn, "DROP TABLE epicenters;")
+    execute(conn, "DROP TABLE IF EXISTS shakemaps;")
+    execute(conn, "DROP TABLE IF EXISTS epicenters;")
 
 
 def insert_gdf_into_table(
     conn: duckdb.DuckDBPyConnection,
     gdf: gpd.GeoDataFrame,
     table_name: str,
-    schema: Dict,
-    primary_keys=List[str],
+    schema: TableSchema,
 ):
-    """Insertd a geodataframe into existing DuckDB table.
+    """Inserts a geodataframe into existing DuckDB table.
 
     Assumes the schema of the geodataframe is the same as the DuckDB table's schema."""
     # convert geometry to WKT
@@ -54,22 +42,19 @@ def insert_gdf_into_table(
     # register the gdf as a DuckDB table
     conn.register("new_gdf", gdf)
 
-    columns = schema.keys()
-
-    # # create the primary key conditions. this ensure that an error
-    # # is not thrown if this data already exists in the duckdb table
-    # terms_list = []
-    # for key in primary_keys:
-    #     terms = f"{table_name}.{key} = new_gdf.{key}"
-    #     terms_list.append(terms)
-    # condition = f"WHERE {' AND '.join(terms_list)}"
+    list_cols = ", ".join(schema.schema.keys())
+    query = f"""INSERT INTO {table_name} ({list_cols})
+                SELECT {list_cols} FROM new_gdf;"""
 
     # persist it into DuckDB
-    execute(
-        conn,
-        f"""INSERT INTO {table_name} ({', '.join(columns)})
-            SELECT {', '.join(columns)} FROM new_gdf;""",
-    )
+    try:
+        execute(
+            conn,
+            query,
+        )
+    except duckdb.ConstraintException as e:
+        logging.info(query)
+        logging.info(f"Skipping insert: {e.args[0]}")
     conn.unregister("new_gdf")
 
 
@@ -117,6 +102,7 @@ def create_tables(conn: duckdb.DuckDBPyConnection, replace: bool = False):
     else:
         create_statement = "CREATE TABLE IF NOT EXISTS"
 
+    # Create tables from input csv files
     execute(
         conn,
         f"{create_statement} {DAMAGE_FUNCTION_VARS_TABLE} AS SELECT * FROM read_csv('{DAMAGE_FUNCTION_VARS_PATH}')",
@@ -125,27 +111,18 @@ def create_tables(conn: duckdb.DuckDBPyConnection, replace: bool = False):
         conn,
         f"{create_statement} {BLDG_PCT_BY_TRACT_TABLE} AS SELECT * FROM read_csv('{BLDG_PCTS_PER_TRACT_PATH}')",
     )
-    execute(
-        conn,
-        f"{create_statement} {EVENT_INFO_TABLE} (event_id VARCHAR PRIMARY KEY, status STRING, timestamp TIMESTAMP);",
-    )
-    epicenters_schema_duckdb = [
-        f"{col} {type}" for col, type in epicenters_schema.items()
-    ]
-    execute(
-        conn,
-        f"{create_statement} epicenters ({', '.join(epicenters_schema_duckdb)}, PRIMARY KEY ({', '.join(epicenters_primary_key)}));",
-    )
-    shakemap_schema_duckdb = [f"{col} {type}" for col, type in shakemaps_schema.items()]
-    execute(
-        conn,
-        f"{create_statement} shakemaps ({', '.join(shakemap_schema_duckdb)}, PRIMARY KEY ({', '.join(shakemaps_primary_key)}));",
-    )
-    census_geo_exposure_schema_duckdb = [
-        f"{col} {type}" for col, type in census_geo_exposure_schema.items()
-    ]
-    execute(
-        conn,
-        f"""{create_statement} census_geo_exposure ({', '.join(census_geo_exposure_schema_duckdb)},
-        PRIMARY KEY ({', '.join(census_geo_exposure_primary_key)}));""",
-    )
+
+    # Read all schemas from the all_schemas.yaml file
+    schemas = SchemaConfig.from_yaml(ALL_SCHEMAS_PATH).schemas
+
+    # Create all tables in all_schemas.yaml
+    for table_name in [
+        "epicenters",
+        "shakemaps",
+        "census_geo_exposure",
+        EVENT_INFO_TABLE,
+    ]:
+        execute(
+            conn,
+            f"{create_statement} {table_name} ({schemas[table_name].duckdb_schema}, PRIMARY KEY ({schemas[table_name].duckdb_pk}));",
+        )

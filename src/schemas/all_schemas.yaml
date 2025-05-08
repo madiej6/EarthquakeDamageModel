@@ -1,0 +1,119 @@
+schemas:
+  event_log:
+    schema:
+      event_id: VARCHAR
+      status: STRING
+      timestamp: TIMESTAMP
+    primary_key:
+      - event_id
+
+  census_geo_exposure:
+    schema:
+      GEOID: VARCHAR
+      event_id: VARCHAR
+      MMI_max: FLOAT
+      MMI_min: FLOAT
+      MMI_avg: FLOAT
+      PGV_max: FLOAT
+      PGV_min: FLOAT
+      PGV_avg: FLOAT
+      PGA_max: FLOAT
+      PGA_min: FLOAT
+      PGA_avg: FLOAT
+      MMI_int: INT
+      geometry: VARCHAR
+    primary_key:
+      - GEOID
+      - event_id
+
+  epicenters:
+    schema:
+      event_id: VARCHAR
+      title: VARCHAR
+      magnitude: FLOAT
+      date_time: VARCHAR
+      place: VARCHAR
+      depth_km: FLOAT
+      url: VARCHAR
+      status: VARCHAR
+      updated: BIGINT
+      geometry: VARCHAR
+    primary_key:
+      - event_id
+      - updated
+
+  shakemaps:
+    schema:
+      event_id: VARCHAR
+      updated: BIGINT
+      dataset: VARCHAR
+      AREA: FLOAT
+      PERIMETER: FLOAT
+      PGAPOL_: BIGINT
+      PGAPOL_ID: BIGINT
+      GRID_CODE: BIGINT
+      PARAMVALUE: FLOAT
+      geometry: VARCHAR
+    primary_key:
+      - event_id
+      - updated
+      - dataset
+      - PARAMVALUE
+
+  tracts:
+    schema:
+      STATEFP: VARCHAR
+      COUNTYFP: VARCHAR
+      TRACTCE: VARCHAR
+      GEOID: VARCHAR
+      GEOIDFQ: VARCHAR
+      NAME: VARCHAR
+      NAMELSAD: VARCHAR
+      MTFCC: VARCHAR
+      FUNCSTAT: VARCHAR
+      ALAND: BIGINT
+      AWATER: BIGINT
+      INTPTLAT: VARCHAR
+      INTPTLON: VARCHAR
+      geometry: VARCHAR
+    primary_key:
+      - GEOID
+
+  usa_structures:
+    schema:
+      NAME: VARCHAR
+      URL: VARCHAR
+      BUILD_ID: FLOAT
+      OCC_CLS: VARCHAR
+      PRIM_OCC: VARCHAR
+      SEC_OCC: VARCHAR
+      PROP_ADDR: VARCHAR
+      PROP_CITY: VARCHAR
+      PROP_ST: VARCHAR
+      PROP_ZIP: VARCHAR
+      OUTBLDG: VARCHAR
+      HEIGHT: FLOAT
+      SQMETERS: FLOAT
+      SQFEET: FLOAT
+      H_ADJ_ELEV: VARCHAR
+      L_ADJ_ELEV: VARCHAR
+      FIPS: VARCHAR
+      CENSUSCODE: VARCHAR
+      PROD_DATE: TIMESTAMP
+      SOURCE: VARCHAR
+      USNG: VARCHAR
+      LONGITUDE: FLOAT
+      LATITUDE: FLOAT
+      IMAGE_NAME: VARCHAR
+      IMAGE_DATE: TIMESTAMP
+      VAL_METHOD: VARCHAR
+      REMARKS: VARCHAR
+      UUID: VARCHAR
+      B_CODE: VARCHAR
+      POP_CI95_LOWER: VARCHAR
+      POP_MEDIAN: VARCHAR
+      POP_CI95_UPPER: VARCHAR
+      geometry: VARCHAR
+    primary_key:
+      - NAME
+      - UUID

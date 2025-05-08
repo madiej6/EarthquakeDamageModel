@@ -6,6 +6,7 @@ import os
 import zipfile
 import io
 from datetime import datetime
+from configs.schemas import SchemaConfig
 from utils.within_conus import check_coords
 from utils.get_file_paths import get_shakemap_dir
 from utils.status_logger import log_status, get_last_status
@@ -13,11 +14,9 @@ from utils.get_date import convert_to_timestamp
 import logging
 from utils.duckdb import execute, insert_gdf_into_table
 import duckdb
-from schemas.epicenters import primary_key as epicenters_pk, schema as epicenters_schema
-from schemas.shakemaps import primary_key as shakemaps_pk, schema as shakemaps_schema
 from configs.event import Event
 from configs.shakemap import ShakeMap
-from constants import FEEDURL
+from constants import ALL_SCHEMAS_PATH, FEEDURL
 
 logging.basicConfig(level=logging.INFO)
 
@@ -46,7 +45,8 @@ def add_shakemap_layer_to_duckdb(
     gdf["event_id"] = event.id
     gdf["updated"] = event.properties.updated
     gdf["dataset"] = shapefile
-    insert_gdf_into_table(conn, gdf, "shakemaps", shakemaps_schema, shakemaps_pk)
+    shakemaps_schema = SchemaConfig.from_yaml(ALL_SCHEMAS_PATH).schemas["shakemaps"]
+    insert_gdf_into_table(conn, gdf, "shakemaps", shakemaps_schema)
 
 
 def create_shakemap_gis_files(
@@ -105,10 +105,9 @@ def create_shakemap_gis_files(
     event_gdf = gpd.GeoDataFrame(data_dict, geometry=[epicenter])
     event_gdf.to_file(os.path.join(event.shakemap_dir, "epicenter.shp"))
 
+    epicenters_schema = SchemaConfig.from_yaml(ALL_SCHEMAS_PATH).schemas["epicenters"]
     # add epicenter to epicenters table
-    insert_gdf_into_table(
-        conn, event_gdf, "epicenters", epicenters_schema, epicenters_pk
-    )
+    insert_gdf_into_table(conn, event_gdf, "epicenters", epicenters_schema)
 
     # add shakemap files to shakemaps table
     for shp in ["mi", "pga", "pgv"]:

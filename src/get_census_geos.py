@@ -1,23 +1,22 @@
 import requests
 from typing import List
+import time
 import io
+import argparse
 import duckdb
 import geopandas as gpd
 from bs4 import BeautifulSoup
-from utils.duckdb import execute, initialize
+from utils.duckdb import execute, initialize, insert_gdf_into_table
 import logging
 import tempfile
 import os
-from schemas.tracts import schema, primary_key
+from constants import ALL_SCHEMAS_PATH, CENSUS_URL
+from configs.schemas import SchemaConfig
 
 
 logging.basicConfig(level=logging.INFO)
 
-# Constants
-CENSUS_URL = "https://www2.census.gov/geo/tiger/TIGER2024/TRACT/"
 
-
-# Scrape the FTP-style directory page for links
 def get_zip_links(conn: duckdb.DuckDBPyConnection) -> List[str]:
     """Gets all zip download links at a provided URL.
 
@@ -46,7 +45,8 @@ def get_zip_links(conn: duckdb.DuckDBPyConnection) -> List[str]:
 
 def create_tracts_table(conn: duckdb.DuckDBPyConnection, overwrite: bool = False):
 
-    tracts_schema = [f"{col} {type}" for col, type in schema.items()]
+    tracts_schema = SchemaConfig.from_yaml(ALL_SCHEMAS_PATH).schemas["tracts"]
+
     # Set up
     if overwrite:
         create_statement = "CREATE OR REPLACE TABLE"
@@ -56,7 +56,7 @@ def create_tracts_table(conn: duckdb.DuckDBPyConnection, overwrite: bool = False
         conn,
         f"""
         {create_statement} tracts_2024
-        ({', '.join(tracts_schema)}, PRIMARY KEY ({primary_key}));
+        ({tracts_schema.duckdb_schema}, PRIMARY KEY ({tracts_schema.duckdb_pk}));
     """,
     )
 
@@ -85,26 +85,32 @@ def get_tracts(conn: duckdb.DuckDBPyConnection, zip_url: str):
     vsizip_path = f"/vsizip/{tmp_zip_path}"
     gdf = gpd.read_file(vsizip_path, engine="pyogrio")
 
-    # convert geometry to WKT
-    gdf["geometry"] = gdf["geometry"].apply(lambda geom: geom.wkt)
-    # insert into DuckDB
-    conn.register("gdf_view", gdf)
-    conn.execute(
-        """
-        INSERT INTO tracts_2024
-        SELECT * FROM gdf_view
-    """
-    )
-    conn.unregister("gdf_view")
+    tracts_schema = SchemaConfig.from_yaml(ALL_SCHEMAS_PATH).schemas["tracts"]
+    insert_gdf_into_table(conn, gdf, "tracts", tracts_schema)
 
     # Clean up temporary zip file
     os.remove(tmp_zip_path)
 
 
 if __name__ == "__main__":
+    start_time = time.time()
+
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument(
+        "--overwrite",
+        dest="overwrite",
+        action="store_true",
+        help="When used, existing table is overwritten.",
+    )
+
+    args = parser.parse_args()
+
+    overwrite = args.overwrite
+
     conn = initialize()
     links = get_zip_links(conn)
     if len(links) > 0:
-        create_tracts_table(conn, False)
+        create_tracts_table(conn, overwrite)
         for link in links:
             get_tracts(conn, link)

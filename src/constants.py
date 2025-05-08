@@ -1,4 +1,12 @@
-EVENT_INFO_FILE = "event_info.txt"
+import os
+
+REPO_PATH = os.getcwd()
+
+ALL_SCHEMAS_PATH = os.path.join(REPO_PATH, "src/schemas/all_schemas.yaml")
+
+
+USA_STRUCTURES_URL = "https://disasters.geoplatform.gov/USA_Structures/"
+CENSUS_URL = "https://www2.census.gov/geo/tiger/TIGER2024/TRACT/"
 
 FEEDURL = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/significant_week.geojson"  # Significant Events - 1 week
 # FEEDURL = 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/4.5_hour.geojson' #1 hour M4.5+
