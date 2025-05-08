@@ -1,7 +1,13 @@
 # EarthquakeDamageModel
 
-**Methodology**
 For more information about model methodology, review [this blog post on Medium](https://medium.com/new-light-technologies/a-predictive-earthquake-damage-model-written-in-python-e1862518fd92).
+
+## v2.0
+Originally, this model was built using Esri's arcpy library, which is non-open source. Version 2.0 of the model includes the following major updates:
+- Only utilizes open source Python libraries
+- All datasets are stored and accessed using DuckDB
+- Web scraper to download Census Tracts & Building Outlines for you
+- Linters forcing better code documentation and standards
 
 ## Developer Setup
 Set up a conda environment using the `requirements.txt` file.
