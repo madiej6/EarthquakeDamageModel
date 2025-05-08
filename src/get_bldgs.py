@@ -44,6 +44,12 @@ def get_zip_links(conn: duckdb.DuckDBPyConnection) -> List[str]:
 
 
 def create_bldgs_table(conn: duckdb.DuckDBPyConnection, overwrite: bool = False):
+    """Create the usa_structures duckdb table.
+
+    Args:
+        conn (duckdb.DuckDBPyConnection): duckdb connection
+        overwrite (bool): flag to overwrite existing table
+    """
 
     bldgs_schema = SchemaConfig.from_yaml(ALL_SCHEMAS_PATH).schemas["usa_structures"]
 
@@ -59,8 +65,6 @@ def create_bldgs_table(conn: duckdb.DuckDBPyConnection, overwrite: bool = False)
         ({bldgs_schema.duckdb_schema}, PRIMARY KEY ({bldgs_schema.duckdb_pk}));
     """,
     )
-
-    return
 
 
 def ensure_columns(gdf: gpd.GeoDataFrame, expected_columns: list) -> gpd.GeoDataFrame:
@@ -82,6 +86,15 @@ def ensure_columns(gdf: gpd.GeoDataFrame, expected_columns: list) -> gpd.GeoData
 
 
 def get_bldgs(conn: duckdb.DuckDBPyConnection, zip_url: str):
+    """Downloads, unzips, and loads USA Structures building outlines from a given zip URL into DuckDB.
+
+    Args:
+        conn (duckdb.DuckDBPyConnection): DuckDB connection to insert data into.
+        zip_url (str): URL of the zip file containing the geodatabase (GDB).
+
+    Raises:
+        ValueError: If no layers are found in the geodatabase.
+    """
 
     logging.info(f"Downloading zip file: {zip_url}")
 
