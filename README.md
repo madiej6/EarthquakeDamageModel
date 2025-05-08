@@ -17,7 +17,38 @@ All commands in this README should be run inside of the following path:
 
 ## Data Downloads
 
-This Python package contains 2 modules to download Census Tracts and Building Outlines (USA Structures) for the USA. These datasets are required for the model to run. You should run these commands once, to download the source data and extract them to the local DuckDB that will contain all data necessary for the model. You do not need to run these commands again unless you change the data source, or delete the database and need to recreate it. In which case, you can add the `--overwrite` flag to the commands below.
+This Python package contains modules to download Census Tracts and Building Outlines (USA Structures) for the USA. These datasets are required for the model to run. You should run these commands once, to download the source data and extract them to the local DuckDB that will contain all data necessary for the model. You do not need to run these commands again unless you change the data source, or delete the database and need to recreate it. In which case, you can add the `--overwrite` flag to the commands below.
+
+All input datasets (tracts, building outlines, shakemaps, epicenters, exposure and damage outputs, etc) are stored in the following database: `EarthquakeDamageModel/data/eq_damage_model.db` and can be accessed via the command line (with your conda environment activated). From here, you can interact with the tables using SQL:
+```
+>> duckdb data/eq_damage_model.db
+D show tables;
+┌──────────────────────┐
+│         name         │
+│       varchar        │
+├──────────────────────┤
+│ bldg_type_mappings   │
+│ census_geo_exposure  │
+│ damage_function_vars │
+│ damage_mappings      │
+│ epicenters           │
+│ event_log            │
+│ shakemaps            │
+│ tracts_2024          │
+│ usa_structures       │
+└──────────────────────┘
+D select * from event_log limit 5;
+┌──────────────┬──────────┬─────────────────────┐
+│   event_id   │  status  │      timestamp      │
+│   varchar    │ varchar  │      timestamp      │
+├──────────────┼──────────┼─────────────────────┤
+│ ci40925991   │ reviewed │ 2025-04-20 17:18:42 │
+│ ak02550duu6u │ reviewed │ 2025-04-20 19:27:02 │
+│ us6000q6cs   │ reviewed │ 2025-04-17 02:06:34 │
+│ ci40926623   │ reviewed │ 2025-04-19 00:26:22 │
+│ napa2014     │ None     │ 1970-01-01 00:00:00 │
+└──────────────┴──────────┴─────────────────────┘
+```
 
 ### Census Tracts
 Source: https://www2.census.gov/geo/tiger/TIGER2024/TRACT/
@@ -44,22 +75,17 @@ You can add the flag `--overwrite` to overwrite the existing DuckDB table.
 ## Run the Earthquake Damage Model
 
 Then, in terminal run the following initiate the Earthquake Model:
-`python main.py`
+```
+python main.py
+```
 
 The following args are available for use:
 
+`--test`: Use this flag to run in testing mode.
+`--overwrite`: Use this flag to overwrite existing tables.
+`--mmi`: Use this arg to set a new threshold for ShakeMap downloads. Default value is 4.0, so any ShakeMaps with a Magnitude < 4.0 will not be downloaded. For example, `python main.py --mmi=3.0` would change the Magnitude threshold from 4.0 to 3.0.
 
-<img align="right" src = "images/bldg_centroids_gdb_screenshot.PNG" width="250">
-
-#### Building Centroids:
-In order to estimate the number of structures impacted, the user will need to have a local geodatabase
-containing building centroids for each state. Some open and public data sets that could be used are
-[Microsoft Building Footprints](https://github.com/microsoft/USBuildingFootprints),
-[OpenStreetMap](https://osmbuildings.org/) or
-[ORNL USA Structures](http://disasters.geoplatform.gov/publicdata/Partners/ORNL/USA_Structures/).
-The building centroids are used to calculate the count of structures within each Census Tract.
-The file path of this geodatabase will need to be updated in `config.py` for the variable "BuildingCentroids".
-(see image on right)
+You can also change the `FEED_URL` in `src/constants.py` to change the ShakeMap API that is scanned for new events.
 
 
 #### Testing Mode:
