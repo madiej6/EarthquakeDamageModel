@@ -103,6 +103,10 @@ def create_shakemap_gis_files(
     epicenter = Point(event.geometry.lon, event.geometry.lat)
     # convert to geodataframe
     event_gdf = gpd.GeoDataFrame(data_dict, geometry=[epicenter])
+
+    if test:
+        event_gdf = event_gdf.set_crs(epsg=4326)
+
     event_gdf.to_file(os.path.join(event.shakemap_dir, "epicenter.shp"))
 
     epicenters_schema = SchemaConfig.from_yaml(ALL_SCHEMAS_PATH).schemas["epicenters"]

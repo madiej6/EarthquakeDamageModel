@@ -16,12 +16,12 @@ import logging
 logging.basicConfig(level=logging.INFO)
 
 
-# Scrape the FTP-style directory page for links
-def get_zip_links(conn: duckdb.DuckDBPyConnection) -> List[str]:
+def get_zip_links(conn: duckdb.DuckDBPyConnection, state: str = None) -> List[str]:
     """Gets all zip download links at a provided URL.
 
     Args:
         conn (duckdb.DuckDBPyConnection): duckdb connection
+        state (str): Optional state filter
 
     Returns:
         List[str]: list of zip download links
@@ -37,8 +37,10 @@ def get_zip_links(conn: duckdb.DuckDBPyConnection) -> List[str]:
     zip_links = [
         a
         for a in all_links
-        if "href" in a.attrs and a["href"].endswith(".zip")
-        if a["href"] not in done_urls
+        if "href" in a.attrs
+        and a["href"].endswith(".zip")
+        and a["href"] not in done_urls
+        and (not state or state in a["href"])
     ]
     return [a["href"] for a in zip_links]
 
@@ -112,10 +114,9 @@ def get_bldgs(conn: duckdb.DuckDBPyConnection, zip_url: str):
             zip_ref.extractall(tmp_dir)
 
         # Locate the GDB directory inside the extracted contents
-        subdir = zip_url.split("/")[-1].split(".zip")[0]
-        list_unzipped_files = os.listdir(os.path.join(tmp_dir, subdir))
+        list_unzipped_files = os.listdir(tmp_dir)
         gdb = [f for f in list_unzipped_files if f.endswith(".gdb")][0]
-        gdb_path = os.path.join(tmp_dir, subdir, gdb)
+        gdb_path = os.path.join(tmp_dir, gdb)
 
         # List layers in the GDB
         layers = gpd.list_layers(gdb_path)
@@ -141,6 +142,17 @@ def get_bldgs(conn: duckdb.DuckDBPyConnection, zip_url: str):
             gdf[bldgs_schema.primary_key].duplicated().sum() == 0
         ), f"{bldgs_schema.primary_key} is non-unique."
 
+        # check to see if an older version of the data exists
+        # if it does, delete the older version before adding the new data
+        query = """select distinct NAME, URL from usa_structures;"""
+        results_df = execute(conn, query).df()
+        if layer_name in results_df["NAME"].to_list():
+            query = f"""
+            DELETE FROM usa_structures
+            WHERE NAME = '{layer_name}';
+            """
+            execute(conn, query)
+
         insert_gdf_into_table(conn, gdf, "usa_structures", bldgs_schema)
 
         logging.info(f"Inserted {len(gdf)} rows into usa_structures")
@@ -158,12 +170,19 @@ if __name__ == "__main__":
         help="When used, existing table is overwritten.",
     )
 
+    parser.add_argument(
+        "--state",
+        dest="state",
+        help="When used, only the provided state's buildings are downloaded.",
+    )
+
     args = parser.parse_args()
 
     overwrite = args.overwrite
+    state = args.state
 
     conn = initialize()
-    links = get_zip_links(conn)
+    links = get_zip_links(conn, state)
     # links = ['https://fema-femadata.s3.amazonaws.com/Partners/ORNL/USA_Structures/Rhode+Island/Deliverable20230502RI.zip']
     if len(links) > 0:
         create_bldgs_table(conn, overwrite)

@@ -10,7 +10,8 @@ from earthquake_shakemap_download import (
 
 from shakemap_census_exposure import shakemap_into_census_geo
 
-# from get_bldg_centroids import shakemap_get_bldgs
+from get_bldgs import get_bldgs
+
 # from tract_damage_model import main as tract_damages
 import logging
 from utils.duckdb import initialize
@@ -39,13 +40,13 @@ def main(mmi_threshold: int = 4.0, test_mode: bool = False, overwrite: bool = Fa
         new_events = [event]
 
     for event in new_events:
-        logging.info("Census Data Processing for: ", event.id)
+        logging.info(f"Census Data Processing for: {event.id}")
         shakemap_into_census_geo(conn, event, "tracts")
 
-        logging.info("Gathering Building Outlines for: ", event.id)
-        # shakemap_get_bldgs(event_id=event_id)
+        logging.info(f"Gathering Building Outlines for: {event.id}")
+        get_bldgs(event_id=event.id)
 
-        logging.info("Running Tract-Level Damage Assessment Model for: ", event.id)
+        logging.info(f"Running Tract-Level Damage Assessment Model for: {event.id}")
         # tract_damages(event_id=event_id)
 
     return
