@@ -1,7 +1,5 @@
 # Files to ignore:
-data/esri_2019_detailed_counties/*
-data/tl_2019_us_tracts/*
-ShakeMaps/*
+data/*
 
 # PyCharm
 .idea/
