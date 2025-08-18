@@ -158,6 +158,28 @@ def get_bldgs(conn: duckdb.DuckDBPyConnection, zip_url: str):
         logging.info(f"Inserted {len(gdf)} rows into usa_structures")
 
 
+def shakemap_get_bldgs(event_id=str):
+
+    query = f"""WITH shakemap_extent AS
+            (SELECT
+                event_id,
+                ST_Union_Agg(ST_GEOMFROMTEXT(geometry)) AS geometry
+            FROM shakemaps
+            WHERE event_id = '{event_id}' and dataset='mi'
+            GROUP BY event_id)
+
+            SELECT NAME, UUID, {event_id} as event_id FROM usa_structures u
+            WHERE ST_INTERSECTS(u.geometry, shakemap_extent.geometry)
+    """
+    execute(conn, query)
+
+    # TO-DO
+    # - store intersecting NAME, UUID in a new table, maybe called exposed_structures
+    # - intersect buildings with MMI, PGA and PGV, add those cols to schema
+
+    return
+
+
 if __name__ == "__main__":
     start_time = time.time()
 
