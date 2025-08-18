@@ -3,8 +3,9 @@ import numpy as np
 import geopandas as gpd
 import duckdb
 from configs.event import Event
+from configs.schemas import SchemaConfig
 from utils.duckdb import execute, insert_gdf_into_table
-from schemas.census_geo_exposure import schema, primary_key
+from constants import ALL_SCHEMAS_PATH
 
 
 def shakemap_into_census_geo(
@@ -102,9 +103,8 @@ def shakemap_into_census_geo(
     # add an "integer" MMI with this math: "math.floor( !max_MMI! )",
     gdf["MMI_int"] = np.floor(gdf["MMI_max"])
 
-    insert_gdf_into_table(
-        conn, gdf.reset_index(), "census_geo_exposure", schema, primary_key
-    )
+    schema = SchemaConfig.from_yaml(ALL_SCHEMAS_PATH).schemas["census_geo_exposure"]
+    insert_gdf_into_table(conn, gdf.reset_index(), "census_geo_exposure", schema)
 
     # save as shapefile
     gdf.to_file(os.path.join(event.shakemap_dir, f"{census_geo}_2024_{event.id}.shp"))
